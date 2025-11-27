@@ -9,10 +9,15 @@ app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Modeli yükləyirik
-print("XTTS v2 modeli endirilir... (ilk dəfə 3-5 dəqiqə)")
-tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=False, progress_bar=True)
-print("Model hazır! Səs klonlama aktivdir")
+# Modeli LAZY yüklə - deploy zamanı problem yaratmasın
+tts = None
+
+def load_model():
+    global tts
+    if tts is None:
+        print("XTTS v2 modeli yüklənir...")
+        tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=False, progress_bar=True)
+        print("Model hazır!")
 
 HTML = """
 <!DOCTYPE html>
@@ -71,6 +76,9 @@ def index():
         text = request.form["text"].strip()
         
         if voice_file and text:
+            # Modeli ilk istifadədə yüklə
+            load_model()
+            
             voice_path = os.path.join(UPLOAD_FOLDER, str(uuid.uuid4()) + ".wav")
             output_path = os.path.join(UPLOAD_FOLDER, str(uuid.uuid4()) + ".wav")
             
@@ -100,4 +108,11 @@ def download(filename):
         return response
     return "Fayl tapılmadı", 404
 
-# RENDER ÜÇÜN HEÇ NƏ YAZMA – Procfile ilə işləyəcək!
+@app.route("/health")
+def health():
+    return "OK", 200
+
+# ƏSAS - PORT binding
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
