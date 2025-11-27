@@ -1,6 +1,18 @@
 #!/bin/bash
 set -e
+
+echo "=== Pip upgrade edilir ==="
 pip install --upgrade pip
+
+echo "=== Kitabxanalar yüklənir ==="
 pip install -r requirements.txt
-echo "Model endirilir... (biraz gözlə)"
-python -c "from TTS.api import TTS; TTS('tts_models/multilingual/multi-dataset/xtts_v2', gpu=False)"
+
+echo "=== Model yoxlanılır (LAZY loading) ==="
+# Modeli deploy zamanı YOX, ilk istifadədə yüklə
+python -c "
+print('TTS kitabxanası yoxlanılır...')
+from TTS.api import TTS
+print('TTS uğurla import edildi - model lazy loading ilə işləyəcək')
+"
+
+echo "=== Build tamamlandı ==="
