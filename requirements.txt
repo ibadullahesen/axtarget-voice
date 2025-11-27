@@ -1,4 +1,5 @@
+Flask
 coqui-tts
-gradio
+gunicorn
 torch
 torchaudio
