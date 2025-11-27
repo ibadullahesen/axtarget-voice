@@ -1,5 +1,7 @@
-Flask
-coqui-tts
-gunicorn
-torch
-torchaudio
+Flask==2.3.3
+coqui-tts==0.22.0
+gunicorn==21.2.0
+torch==2.0.1
+torchaudio==2.0.2
+numpy==1.24.3
+librosa==0.10.1
