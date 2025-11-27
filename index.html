@@ -1,25 +1,102 @@
+from flask import Flask, request, send_file, render_template_string, after_this_request
+from TTS.api import TTS
+import os
+import uuid
+
+app = Flask(__name__)
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Modeli yükləyirik – ilk dəfə 3-5 dəqiqə çəkəcək
+print("=== XTTS v2 modeli endirilir... (ilk dəfədir, gözlə) ===")
+tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=False, progress_bar=True)
+print("=== Model hazır! Səs klonlama aktivdir ===")
+
+HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Pulsuz AI Səs Generatoru</title>
-  <meta charset="UTF-8">
+    <title>AxtarGet Voice – Səs Klonlama</title>
+    <meta charset="utf-8">
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <h1>Pulsuz AI Səs Generatoru</h1>
-  
-  <input id="text" type="text" style="width:300px;" placeholder="Mətni yaz...">
-  <br><br>
-  <button onclick="speak()">Səsi oxut</button>
+<body class="bg-gradient-to-br from-indigo-900 to-purple-900 min-h-screen flex items-center justify-center p-6">
+    <div class="bg-white/10 backdrop-blur-xl rounded-3xl p-12 max-w-5xl w-full shadow-2xl border border-white/20">
+        <h1 class="text-6xl font-black text-center bg-gradient-to-r from-cyan-400 to-pink-500 bg-clip-text text-transparent mb-6">
+            AxtarGet Voice
+        </h1>
+        <p class="text-2xl text-gray-200 text-center mb-10">5-15 saniyə öz səsinlə danış → istənilən mətni o səslə danışdır!</p>
 
-  <script>
-    function speak() {
-      const text = document.getElementById("text").value;
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.lang = "az-AZ";   // Azərbaycan səsi
-      msg.rate = 1;         // Sürət
-      msg.pitch = 1;        // Ton
-      speechSynthesis.speak(msg);
-    }
-  </script>
+        <form method="post" enctype="multipart/form-data" class="space-y-10">
+            <div class="grid md:grid-cols-2 gap-10">
+                <div>
+                    <label class="block text-cyan-300 font-bold text-lg mb-4">1. Öz səsini yüklə (wav/mp3/ogg)</label>
+                    <input type="file" name="voice" accept="audio/*" required class="block w-full text-white file:mr-4 file:py-5 file:px-8 file:rounded-full file:border-0 file:bg-gradient-to-r file:from-cyan-600 file:to-purple-600 file:text-white file:font-bold text-lg">
+                </div>
+                <div>
+                    <label class="block text-pink-300 font-bold text-lg mb-4">2. Səsləndiriləcək mətn</label>
+                    <textarea name="text" rows="7" required placeholder="Salam qardaş, bu gün Bakıda hava necədir? Mən İbadullahəm, səs klonlama işləyir!" class="w-full px-6 py-5 rounded-2xl bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-lg"></textarea>
+                </div>
+            </div>
+            <button type="submit" class="w-full py-7 bg-gradient-to-r from-cyan-500 to-pink-600 text-white text-4xl font-black rounded-3xl hover:scale-105 transition duration-300 shadow-2xl">
+                SƏSLƏNDİR
+            </button>
+        </form>
+
+        {% if result %}
+        <div class="mt-16 p-10 bg-green-600/30 border-4 border-green-400 rounded-3xl text-center">
+            <p class="text-3xl text-green-300 font-bold mb-8">{{ result }}</p>
+            <audio controls class="w-full mb-8">
+                <source src="{{ url_for('download', filename=filename) }}" type="audio/wav">
+            </audio>
+            <br>
+            <a href="{{ url_for('download', filename=filename) }}" class="inline-block px-12 py-6 bg-green-600 text-white text-2xl font-bold rounded-2xl hover:bg-green-700 shadow-xl">
+                AUDIO ENDİR (.wav)
+            </a>
+        </div>
+        {% endif %}
+
+        <p class="text-center text-gray-500 mt-20 text-sm">© 2025 AxtarGet Voice – Azərbaycanın ən güclü pulsuz səs klonlayıcısı</p>
+    </div>
 </body>
 </html>
+"""
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        voice_file = request.files["voice"]
+        text = request.form["text"].strip()
+        if not voice_file or not text:
+            return render_template_string(HTML, result="Səs və ya mətn boşdur!")
+
+        voice_path = os.path.join(UPLOAD_FOLDER, str(uuid.uuid4()) + ".wav")
+        output_path = os.path.join(UPLOAD_FOLDER, str(uuid.uuid4()) + ".wav")
+        
+        voice_file.save(voice_path)
+        
+        tts.tts_to_file(text=text, speaker_wav=voice_path, language="az", file_path=output_path)
+        
+        os.remove(voice_path)
+        
+        filename = os.path.basename(output_path)
+        return render_template_string(HTML, result="Səs uğurla klonlandı!", filename=filename)
+    
+    return render_template_string(HTML)
+
+@app.route("/download/<filename>")
+def download(filename):
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    if os.path.exists(file_path):
+        response = send_file(file_path, as_attachment=True, download_name="klonlanmis_ses.wav")
+        @after_this_request
+        def remove_file(resp):
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            return resp
+        return response
+    return "Fayl tapılmadı", 404
+
+# HEÇ BİR if __name__ == "__main__" YAZMA – Procfile ilə işləyəcək!
